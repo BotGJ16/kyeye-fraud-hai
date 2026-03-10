@@ -1,0 +1,12 @@
+streamlit
+google-generativeai
+python-dotenv
+requests
+Pillow
+pytesseract
+opencv-python-headless
+pyzbar
+numpy
+pandas
+idna
+urllib3
