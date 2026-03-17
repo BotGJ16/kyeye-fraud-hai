@@ -105,7 +105,7 @@ def save_analytics(data: dict) -> bool:
     try:
         sheet, status = get_sheet()
         if sheet:
-            sheet.update("A1", [[json.dumps(data, ensure_ascii=False)]])
+            sheet.update(range_name="A1", values=[[json.dumps(data, ensure_ascii=False)]])
             data["sheets_status"] = "connected ✅"
             saved_to_sheets = True
     except Exception as e:
