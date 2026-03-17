@@ -1,8 +1,28 @@
 import json
 import os
+import gspread
+from google.oauth2.service_account import Credentials
 from datetime import datetime, date
 
-ANALYTICS_FILE = "analytics.json"
+# Google Sheets connection
+def get_sheet():
+    try:
+        creds_dict = json.loads(os.getenv("GOOGLE_CREDS", "{}"))
+        if not creds_dict:
+            return None
+        creds = Credentials.from_service_account_info(
+            creds_dict,
+            scopes=[
+                "https://spreadsheets.google.com/feeds",
+                "https://www.googleapis.com/auth/drive"
+            ]
+        )
+        client = gspread.authorize(creds)
+        sheet = client.open("KyaYeFraudHai_Analytics").sheet1
+        return sheet
+    except:
+        return None
+
 
 def load_analytics() -> dict:
     default = {
@@ -19,33 +39,56 @@ def load_analytics() -> dict:
         "last_updated": ""
     }
     try:
-        if os.path.exists(ANALYTICS_FILE):
-            with open(ANALYTICS_FILE, "r") as f:
+        sheet = get_sheet()
+        if sheet:
+            data = sheet.acell("A1").value
+            if data:
+                loaded = json.loads(data)
+                if loaded.get("today_date") != str(date.today()):
+                    loaded["today_checks"] = 0
+                    loaded["today_date"] = str(date.today())
+                return loaded
+    except:
+        pass
+
+    # Fallback — local file
+    try:
+        if os.path.exists("analytics.json"):
+            with open("analytics.json", "r") as f:
                 data = json.load(f)
                 if data.get("today_date") != str(date.today()):
                     data["today_checks"] = 0
                     data["today_date"] = str(date.today())
-                # Missing keys add karo
-                for key, val in default.items():
-                    if key not in data:
-                        data[key] = val
                 return data
     except:
         pass
     return default
 
+
 def save_analytics(data: dict):
+    data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Google Sheets mein save karo
     try:
-        data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with open(ANALYTICS_FILE, "w") as f:
+        sheet = get_sheet()
+        if sheet:
+            sheet.update("A1", json.dumps(data, ensure_ascii=False))
+    except:
+        pass
+
+    # Local backup bhi rakhao
+    try:
+        with open("analytics.json", "w") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     except:
         pass
+
 
 def record_visit():
     data = load_analytics()
     data["total_visits"] += 1
     save_analytics(data)
+
 
 def record_check(verdict: str, fraud_type: str = "Unknown", check_type: str = "text"):
     data = load_analytics()
@@ -69,6 +112,7 @@ def record_check(verdict: str, fraud_type: str = "Unknown", check_type: str = "t
     data["hourly_checks"][hour] = data["hourly_checks"].get(hour, 0) + 1
 
     save_analytics(data)
+
 
 def get_stats() -> dict:
     return load_analytics()

@@ -10,3 +10,5 @@ numpy
 pandas
 idna
 urllib3
+gspread
+google-auth
