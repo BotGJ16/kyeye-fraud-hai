@@ -77,8 +77,11 @@ st.markdown("""
 if "check_count" not in st.session_state:
     st.session_state.check_count = 0
 if "visit_recorded" not in st.session_state:
-    record_visit()
     st.session_state.visit_recorded = True
+    try:
+        record_visit()
+    except Exception:
+        pass
 
 FREE_LIMIT = 5
 
@@ -87,7 +90,15 @@ st.title("🔐 Kya Ye Fraud Hai?")
 st.markdown("**Text • URL • Image • QR • Video — Sab check karo, Hindi mein!**")
 
 # ─── Live Stats Banner ────────────────────────────────────
-stats = get_stats()
+try:
+    stats = get_stats()
+except Exception:
+    stats = {
+        "total_visits": 0, "total_checks": 0,
+        "total_frauds_found": 0, "total_safe_found": 0,
+        "today_checks": 0
+    }
+
 st.markdown(f"""
 <div class="stats-banner">
 🌍 <b>{stats['total_visits']:,}</b> Visitors &nbsp;|&nbsp;
@@ -142,21 +153,17 @@ def display_kya_karo(kya_karo: str):
 
 
 def display_punycode_info(punycode_info: dict):
-    """Punycode attack details dikhao"""
     if not punycode_info or not punycode_info.get("details"):
         return
-
     if punycode_info.get("is_punycode") or punycode_info.get("is_homograph"):
         st.markdown("""
         <div class="punycode-box">
         🔴 PUNYCODE / HOMOGRAPH ATTACK DETECTED!
         </div>
         """, unsafe_allow_html=True)
-
         st.markdown("### 🔬 Punycode Attack Details:")
         for detail in punycode_info["details"]:
             st.error(detail)
-
         if punycode_info.get("decoded_domain"):
             col1, col2 = st.columns(2)
             with col1:
@@ -185,19 +192,21 @@ def display_result(result: dict, check_type: str = "text"):
             st.error(f"❌ Error: {err}")
         return
 
-    # Analytics
-    record_check(
-        verdict=result.get("verdict", "UNKNOWN"),
-        fraud_type=result.get("fraud_type", "Unknown"),
-        check_type=check_type
-    )
+    # Analytics — try/except taaki crash na ho
+    try:
+        record_check(
+            verdict=result.get("verdict", "UNKNOWN"),
+            fraud_type=result.get("fraud_type", "Unknown"),
+            check_type=check_type
+        )
+    except Exception:
+        pass
 
     verdict = result.get("verdict", "SUSPICIOUS").upper()
     score = result.get("risk_score", 50)
     model_used = result.get("model_used", "Gemini AI")
     punycode_info = result.get("punycode_info", {})
 
-    # Punycode attack special banner
     if result.get("fraud_type") == "Punycode Attack" or (
         punycode_info and punycode_info.get("risk_modifier", 0) >= 50
     ):
@@ -222,13 +231,11 @@ def display_result(result: dict, check_type: str = "text"):
                 unsafe_allow_html=True)
     st.markdown("")
 
-    # Risk Score
     st.markdown("### 📊 Risk Score")
     emoji = "🔴" if score > 70 else "🟠" if score > 40 else "🟢"
     st.markdown(f"**{emoji} Risk Level: {score}/100**")
     st.progress(score / 100)
 
-    # Type + Warning
     ca, cb = st.columns(2)
     with ca:
         st.markdown(f"""
@@ -243,7 +250,6 @@ def display_result(result: dict, check_type: str = "text"):
         <b>⚠️ Warning Signs:</b><br>{signs or 'Koi nahi'}
         </div>""", unsafe_allow_html=True)
 
-    # URL-specific info
     if check_type in ("url", "qr"):
         tech = result.get("technical_info", {})
         if tech:
@@ -288,17 +294,14 @@ def display_result(result: dict, check_type: str = "text"):
                 if issue.strip():
                     st.error(f"• {issue.strip()}")
 
-    # QR data
     if result.get("qr_data"):
         st.markdown("### 📱 QR Mein Kya Tha:")
         st.code(result["qr_data"])
 
-    # Image OCR text
     if result.get("extracted_text"):
         with st.expander("📄 Image Se Extract Hua Text"):
             st.code(result["extracted_text"])
 
-    # Video frames
     if result.get("all_frame_results"):
         st.info(f"🎞️ {result.get('total_frames_analyzed',0)} frames analyzed | Duration: {result.get('video_duration','?')}")
         with st.expander("🎥 Har Frame Ka Result"):
@@ -310,23 +313,20 @@ def display_result(result: dict, check_type: str = "text"):
                     f"— Risk: {sc}/100 — {fr.get('fraud_type','?')}"
                 )
 
-    # AI Analysis
     st.markdown("### 💬 AI Ka Analysis")
     exp = result.get("explanation", "").strip()
     st.info(exp if exp else "AI ne analyze kiya. Savdhan rahein.")
 
-    # Kya Karo
     st.markdown("### ✅ Aapko Kya Karna Chahiye")
     display_kya_karo(result.get("kya_karo", ""))
 
-    # Share
     st.markdown("---")
     st.markdown("### 📤 Dosto Ko Savdhan Karo!")
     share = (
-        f"🔐 *Kya Ye Fraud Hai?* ne bataya:\n\n"
-        f"*{verdict}* — Risk: {score}/100\n"
-        f"Type: {result.get('fraud_type','Unknown')}\n\n"
-        f"Check karo: kyeyefraudhai.in\n"
+        f"🔐 *Kya Ye Fraud Hai?* ne bataya:\\n\\n"
+        f"*{verdict}* — Risk: {score}/100\\n"
+        f"Type: {result.get('fraud_type','Unknown')}\\n\\n"
+        f"Check karo: kyeyefraudhai.in\\n"
         f"#FraudAlert #CyberSafety"
     )
     st.code(share, language=None)
@@ -390,19 +390,16 @@ with tab2:
         "url", label_visibility="collapsed",
         placeholder="https://suspicious-site.com/claim"
     )
-
-    # Punycode live demo
     with st.expander("🧪 Punycode Attack Demo — Dekho kaise kaam karta hai"):
         st.markdown("""
         **Ye domains asli lagte hain par FAKE hain:**
         ```
-        xn--80ak6aa92e.com     → выдаёт себя за google.com
+        xn--80ak6aa92e.com     → vyдаёт себя за google.com
         xn--pple-43d.com       → apple.com jaisa dikhta hai
         раурал.com (Cyrillic)  → paytm.com jaisa!
         ```
         Copy karo aur niche scan karo 👇
         """)
-
     u1, u2 = st.columns(2)
     with u1:
         if st.button("🧪 Fake KYC URL", use_container_width=True):
@@ -515,8 +512,12 @@ with tab6:
         """)
 
     st.markdown("### 📊 All-Time Stats")
-    s = get_stats()
-    c1,c2,c3,c4 = st.columns(4)
+    try:
+        s = get_stats()
+    except Exception:
+        s = {"total_visits": 0, "total_checks": 0,
+             "total_frauds_found": 0, "total_safe_found": 0}
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("🌍 Visits", f"{s['total_visits']:,}")
     c2.metric("🔍 Checks", f"{s['total_checks']:,}")
     c3.metric("❌ Frauds", f"{s['total_frauds_found']:,}")
